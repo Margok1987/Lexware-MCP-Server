@@ -63,7 +63,7 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Accept: application/json, text/event-stream' http://127.0.0.1:18080/mcp)" = "401"
           test "$(docker inspect --format='{{.State.Status}}' lexware-mcp-canary)" = "running"
 
-          cat > /tmp/schema-canary.mjs <<'NODE'
+          cat > .schema-canary.mjs <<'NODE'
           import { writeFileSync } from "node:fs";
           import { Client } from "@modelcontextprotocol/sdk/client/index.js";
           import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -87,7 +87,7 @@ jobs:
           writeFileSync("lexware-mcp-tools.json", JSON.stringify(result, null, 2) + "\n");
           await client.close();
           NODE
-          node /tmp/schema-canary.mjs
+          node .schema-canary.mjs
 
       - name: Export image
         run: |
