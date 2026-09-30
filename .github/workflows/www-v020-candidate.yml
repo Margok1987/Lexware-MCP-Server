@@ -63,6 +63,32 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Accept: application/json, text/event-stream' http://127.0.0.1:18080/mcp)" = "401"
           test "$(docker inspect --format='{{.State.Status}}' lexware-mcp-canary)" = "running"
 
+          cat > /tmp/schema-canary.mjs <<'NODE'
+          import { writeFileSync } from "node:fs";
+          import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+          import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+          const client = new Client({ name: "www-v020-schema-canary", version: "1.0.0" });
+          const transport = new StreamableHTTPClientTransport(
+            new URL("http://127.0.0.1:18080/mcp"),
+            {
+              requestInit: {
+                headers: {
+                  Authorization: "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+              }
+            }
+          );
+          await client.connect(transport);
+          const result = await client.listTools();
+          if (result.tools.length !== 53) {
+            throw new Error(`Expected 53 tools, got ${result.tools.length}`);
+          }
+          writeFileSync("lexware-mcp-tools.json", JSON.stringify(result, null, 2) + "\n");
+          await client.close();
+          NODE
+          node /tmp/schema-canary.mjs
+
       - name: Export image
         run: |
           docker image inspect lexware-mcp:0.2.0-www-9bd9b3c --format='{{.Id}}' > lexware-mcp-image-id.txt
@@ -77,5 +103,6 @@ jobs:
             lexware-mcp-0.2.0-www-9bd9b3c.tar
             lexware-mcp-0.2.0-www-9bd9b3c.tar.sha256
             lexware-mcp-image-id.txt
+            lexware-mcp-tools.json
           if-no-files-found: error
           retention-days: 7
