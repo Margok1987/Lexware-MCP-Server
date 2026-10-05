@@ -445,6 +445,35 @@ describe("XRechnung first-class create/contact handling", () => {
     expect(call[1].xRechnung).toEqual({ buyerReference: "04011000-12345-06" });
   });
 
+  it("keeps legacy additionalFields.xRechnung compatible and applies the same validation", async () => {
+    const post = vi.fn(async () => ({ id: "i1" }));
+    const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
+    await handlers["create-draft-invoice"]({
+      ...docBody,
+      lineItems: [
+        { type: "custom", name: "Beratung", quantity: 1, unitName: "Stück", unitPrice: { currency: "EUR", netAmount: 100 } },
+      ],
+      additionalFields: { xRechnung: { buyerReference: "04011000-12345-06" } },
+    });
+    const body = (post.mock.calls[0] as [string, Record<string, unknown>, Record<string, unknown>])[1];
+    expect(body.xRechnung).toEqual({ buyerReference: "04011000-12345-06" });
+  });
+
+  it("rejects legacy additionalFields.xRechnung without buyerReference before POST", async () => {
+    const post = vi.fn(async () => ({ id: "i1" }));
+    const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
+    await expect(
+      handlers["create-draft-invoice"]({
+        ...docBody,
+        lineItems: [
+          { type: "custom", name: "Beratung", quantity: 1, unitName: "Stück", unitPrice: { currency: "EUR", netAmount: 100 } },
+        ],
+        additionalFields: { xRechnung: {} },
+      }),
+    ).rejects.toThrow(/buyerReference is required/);
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it("rejects an explicit XRechnung with non-net tax before POST", async () => {
     const post = vi.fn(async () => ({ id: "i1" }));
     const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
@@ -459,6 +488,18 @@ describe("XRechnung first-class create/contact handling", () => {
     const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
     await expect(
       handlers["create-draft-invoice"]({ ...xInvoice, address: { name: "Behörde" } }),
+    ).rejects.toThrow(/address\.contactId/);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("rejects an explicit XRechnung with a blank contactId before POST", async () => {
+    const post = vi.fn(async () => ({ id: "i1" }));
+    const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
+    await expect(
+      handlers["create-draft-invoice"]({
+        ...xInvoice,
+        address: { contactId: "", name: "Behörde" },
+      }),
     ).rejects.toThrow(/address\.contactId/);
     expect(post).not.toHaveBeenCalled();
   });
@@ -478,8 +519,27 @@ describe("XRechnung first-class create/contact handling", () => {
   it("keeps empty buyerReference as the documented standard-invoice override", async () => {
     const post = vi.fn(async () => ({ id: "i1" }));
     const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
-    await handlers["create-draft-invoice"]({ ...docBody, xRechnung: { buyerReference: "" } });
+    await handlers["create-draft-invoice"]({
+      ...docBody,
+      taxConditions: { taxType: "gross" },
+      xRechnung: { buyerReference: "" },
+    });
     expect(post).toHaveBeenCalledTimes(1);
+    const body = (post.mock.calls[0] as [string, Record<string, unknown>])[1];
+    expect(body.taxConditions).toEqual({ taxType: "gross" });
+  });
+
+  it("rejects empty buyerReference on a standalone one-off address before POST", async () => {
+    const post = vi.fn(async () => ({ id: "i1" }));
+    const handlers = handlersFor(registerDocumentDraftTools, { post } as unknown as LexwareClient);
+    await expect(
+      handlers["create-draft-invoice"]({
+        ...docBody,
+        address: { name: "Behörde" },
+        xRechnung: { buyerReference: "" },
+      }),
+    ).rejects.toThrow(/address\.contactId/);
+    expect(post).not.toHaveBeenCalled();
   });
 
   it("allows pursue-to-invoice to inherit omitted XRechnung prerequisites from the parent", async () => {
@@ -522,6 +582,31 @@ describe("XRechnung first-class create/contact handling", () => {
       buyerReference: "04011000-12345-06",
       vendorNumberAtCustomer: "L-4711",
     });
+  });
+
+  it("rejects contact create with buyerReference but no vendorNumberAtCustomer before POST", async () => {
+    const post = vi.fn(async () => ({ id: "c1" }));
+    const handlers = handlersFor(registerContactDraftTools, { post } as unknown as LexwareClient);
+    await expect(
+      handlers["create-contact"]({
+        roles: { customer: {} },
+        company: { name: "Bundesbehörde" },
+        xRechnung: { buyerReference: "04011000-12345-06" },
+      }),
+    ).rejects.toThrow(/vendorNumberAtCustomer/);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("does not invent an inverse requirement for vendorNumberAtCustomer-only contacts", async () => {
+    const post = vi.fn(async () => ({ id: "c1" }));
+    const handlers = handlersFor(registerContactDraftTools, { post } as unknown as LexwareClient);
+    await handlers["create-contact"]({
+      roles: { customer: {} },
+      company: { name: "Bundesbehörde" },
+      xRechnung: { vendorNumberAtCustomer: "L-4711" },
+    });
+    const body = (post.mock.calls[0] as [string, Record<string, unknown>])[1];
+    expect(body.xRechnung).toEqual({ vendorNumberAtCustomer: "L-4711" });
   });
 
   it("merges a partial XRechnung contact update before validating the pair", async () => {

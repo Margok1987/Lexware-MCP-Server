@@ -97,13 +97,12 @@ describe("JSON-string coercion (jsonObj) for object/array params", () => {
       buyerReference: "04011000-12345-06",
       vendorNumberAtCustomer: "L-4711",
     });
-    expect(() =>
-      parse(contactInputShape, {
-        roles: { customer: {} },
-        company: { name: "Bundesbehörde" },
-        xRechnung: { buyerReference: "04011000-12345-06" },
-      }),
-    ).toThrow();
+    const vendorOnly = parse(contactInputShape, {
+      roles: { customer: {} },
+      company: { name: "Bundesbehörde" },
+      xRechnung: { vendorNumberAtCustomer: "L-4711" },
+    }) as Record<string, unknown>;
+    expect(vendorOnly.xRechnung).toEqual({ vendorNumberAtCustomer: "L-4711" });
 
     const update = parse(contactUpdateShape, {
       xRechnung: JSON.stringify({ buyerReference: "04011000-99999-99" }),

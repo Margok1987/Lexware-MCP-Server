@@ -422,8 +422,8 @@ const contactEmailAddressesSchema = z
 /** XRechnung identity stored on a public-authority customer contact. */
 export const contactXRechnungSchema = z
   .object({
-    buyerReference: z.string().describe("Customer Leitweg-ID for XRechnung."),
-    vendorNumberAtCustomer: z.string().describe("Your vendor number as used by the customer."),
+    buyerReference: z.string().optional().describe("Customer Leitweg-ID for XRechnung."),
+    vendorNumberAtCustomer: z.string().optional().describe("Your vendor number as used by the customer."),
   })
   .passthrough()
   .describe(
@@ -476,7 +476,7 @@ export const contactUpdateShape = {
       .describe("Company fields to set (e.g. vatRegistrationId); merged into the existing company."),
   ).optional(),
   addresses: jsonObj(contactAddressesSchema).optional(),
-  xRechnung: jsonObj(contactXRechnungSchema.partial())
+  xRechnung: jsonObj(contactXRechnungSchema)
     .optional()
     .describe(
       "XRechnung settings. Partial updates are merged with the current contact before Lexware's buyerReference/vendorNumberAtCustomer pair is validated.",

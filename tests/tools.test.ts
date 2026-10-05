@@ -1,5 +1,6 @@
 import type { McpServer } from "skybridge/server";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { type Config, loadConfig } from "../src/config.js";
 import type { LexwareClient } from "../src/lexware/client.js";
 import { registerTools } from "../src/tools/index.js";
@@ -82,6 +83,7 @@ function registeredNames(config: Config): string[] {
 interface ToolDef {
   name: string;
   title?: string;
+  inputSchema?: Record<string, z.ZodTypeAny>;
   outputSchema?: unknown;
   annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean };
 }
@@ -114,6 +116,40 @@ describe("tool metadata", () => {
     expect(untitled).toEqual([]);
     const titles = defs.map((d) => d.title);
     expect(new Set(titles).size).toBe(titles.length);
+  });
+
+  it("publishes first-class XRechnung input fields on the registered MCP tools", () => {
+    const byName = new Map(defs.map((d) => [d.name, d]));
+
+    const invoiceShape = byName.get("create-draft-invoice")?.inputSchema;
+    expect(invoiceShape).toBeDefined();
+    const invoice = z.object(invoiceShape as z.ZodRawShape).parse({
+      xRechnung: { buyerReference: "04011000-12345-06" },
+    }) as Record<string, unknown>;
+    expect(invoice.xRechnung).toEqual({ buyerReference: "04011000-12345-06" });
+
+    const createContactShape = byName.get("create-contact")?.inputSchema;
+    expect(createContactShape).toBeDefined();
+    const contact = z.object(createContactShape as z.ZodRawShape).parse({
+      roles: { customer: {} },
+      company: { name: "Bundesbehörde" },
+      xRechnung: {
+        buyerReference: "04011000-12345-06",
+        vendorNumberAtCustomer: "L-4711",
+      },
+    }) as Record<string, unknown>;
+    expect(contact.xRechnung).toEqual({
+      buyerReference: "04011000-12345-06",
+      vendorNumberAtCustomer: "L-4711",
+    });
+
+    const updateContactShape = byName.get("update-contact")?.inputSchema;
+    expect(updateContactShape).toBeDefined();
+    const update = z.object(updateContactShape as z.ZodRawShape).parse({
+      id: "c1",
+      xRechnung: { buyerReference: "04011000-99999-99" },
+    }) as Record<string, unknown>;
+    expect(update.xRechnung).toEqual({ buyerReference: "04011000-99999-99" });
   });
 
   it("declares no outputSchema while Claude's clients still fail on them (see shared.ts)", () => {

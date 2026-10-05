@@ -786,9 +786,29 @@ function validateExplicitXRechnungInvoice(
   precedingSalesVoucherId?: string,
 ): void {
   const xRechnung = body.xRechnung;
-  if (!xRechnung || typeof xRechnung !== "object" || Array.isArray(xRechnung)) return;
+  if (xRechnung === undefined) return;
+  if (!xRechnung || typeof xRechnung !== "object" || Array.isArray(xRechnung)) {
+    throw new Error("xRechnung must be an object.");
+  }
   const buyerReference = (xRechnung as Record<string, unknown>).buyerReference;
-  if (typeof buyerReference !== "string" || buyerReference === "") return;
+  if (typeof buyerReference !== "string") {
+    throw new Error("xRechnung.buyerReference is required when xRechnung is present.");
+  }
+
+  const address = body.address as Record<string, unknown> | undefined;
+  const contactId = address?.contactId;
+  const hasContactId = typeof contactId === "string" && contactId.trim() !== "";
+  if (address !== undefined && !hasContactId) {
+    throw new Error("XRechnung requires address.contactId referencing an existing Lexware contact.");
+  }
+  if (!precedingSalesVoucherId && !hasContactId) {
+    throw new Error("XRechnung requires address.contactId referencing an existing Lexware contact.");
+  }
+
+  // An empty buyerReference deliberately requests a standard invoice for an
+  // XRechnung-enabled referenced contact. It therefore keeps the contact rule
+  // above, but does not impose the XRechnung-only net/line-item constraints.
+  if (buyerReference === "") return;
 
   const taxConditions = body.taxConditions as Record<string, unknown> | undefined;
   if (!precedingSalesVoucherId && taxConditions?.taxType !== "net") {
@@ -796,14 +816,6 @@ function validateExplicitXRechnungInvoice(
   }
   if (taxConditions?.taxType !== undefined && taxConditions.taxType !== "net") {
     throw new Error('XRechnung requires taxConditions.taxType="net".');
-  }
-
-  const address = body.address as Record<string, unknown> | undefined;
-  if (address !== undefined && typeof address.contactId !== "string") {
-    throw new Error("XRechnung requires address.contactId referencing an existing Lexware contact.");
-  }
-  if (!precedingSalesVoucherId && (!address || typeof address.contactId !== "string")) {
-    throw new Error("XRechnung requires address.contactId referencing an existing Lexware contact.");
   }
 
   const lineItems = body.lineItems;
