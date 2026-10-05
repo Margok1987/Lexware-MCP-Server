@@ -32,14 +32,14 @@ Related projects — local (stdio) Lexware MCP servers:
 
 ## Capabilities
 
-62 tools across three tiers you enable via environment variables, plus one opt-in tool
+61 tools across three tiers you enable via environment variables, plus one opt-in tool
 outside them (`upload-file-from-url`, see below):
 
 | Tier | Default | What it covers |
 |------|---------|----------------|
 | **Read** | always on | Profile; contacts & articles (list/get); the voucherlist (plus `summarize-vouchers` for server-side totals); full documents (invoices, quotations, credit notes, order confirmations, delivery notes, dunnings, down-payment invoices, vouchers); **render any document type to PDF** and **download files/receipts** (returned inline as embedded resources); batch & type-dispatched reads (get-vouchers, get-document, get-voucher-file, get-document-file); payments; reference data (countries, payment conditions, posting categories, print layouts); recurring templates (get & list); event subscriptions; document deeplinks |
-| **Drafts/writes** (`LEXWARE_ENABLE_DRAFTS`) | on | Create **draft** invoices/quotations/credit-notes/order-confirmations/delivery-notes/dunnings (the Lexware API has no update endpoint for these — set every field, including payment terms, at creation); create & update contacts, articles, and **bookkeeping vouchers**; **upload files** and **attach receipts** to vouchers — inline as base64, or **without base64** via a short-lived upload ticket (`create-upload-ticket` → browser drag-and-drop or a `curl` one-liner → `get-upload-result`); create documents as **follow-ups** (`precedingSalesVoucherId`) |
-| **Finalize** (`LEXWARE_ENABLE_FINALIZE`) | off | Issue **legally binding** finalized documents in one step via the dedicated `create-finalized-*` tools (confirmation-gated); irreversible article deletes; **manage webhook event subscriptions** (create + delete — a webhook streams financial events to an external URL, so it's opt-in). Enabling this tier also enables Drafts. |
+| **Drafts/writes** (`LEXWARE_ENABLE_DRAFTS`) | on | Create **draft** invoices/quotations/credit-notes/order-confirmations/delivery-notes/dunnings (the Lexware API has no update endpoint for these — set every field, including payment terms, at creation). Dunnings are the provider exception: they **always remain draft**, require an invoice via `precedingSalesVoucherId`, and still expose their PDF. Also create & update contacts, articles, and **bookkeeping vouchers**; **upload files** and **attach receipts** to vouchers — inline as base64, or **without base64** via a short-lived upload ticket (`create-upload-ticket` → browser drag-and-drop or a `curl` one-liner → `get-upload-result`); create other documents as **follow-ups** (`precedingSalesVoucherId`) |
+| **Finalize** (`LEXWARE_ENABLE_FINALIZE`) | off | Issue finalizable documents in one step via the dedicated `create-finalized-*` tools (confirmation-gated). **Dunnings are intentionally excluded** because Lexware does not finalize them. Also covers irreversible article deletes and **webhook event subscriptions** (create + delete — a webhook streams financial events to an external URL, so it's opt-in). Enabling this tier also enables Drafts. |
 
 Set `LEXWARE_READ_ONLY=true` to force read-only (overrides the flags above).
 

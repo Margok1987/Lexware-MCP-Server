@@ -37,6 +37,11 @@ interface DocType {
   /** Whether `?finalize=true` issuing is supported. */
   finalize: boolean;
   /**
+   * Whether the /file subresource requires a finalized lifecycle state.
+   * Dunnings are the provider exception: they always remain draft but still expose PDF.
+   */
+  fileRequiresFinalized: boolean;
+  /**
    * Whether this document can ever be an e-invoice, i.e. whether asking for its file
    * as XML is a sensible thing to do. Only invoices, credit notes and down payment
    * invoices can; for every other type `electronicDocumentProfile` is always `NONE`,
@@ -46,14 +51,15 @@ interface DocType {
 }
 
 const DOC_TYPES: DocType[] = [
-  { key: "invoice", path: "invoices", label: "invoice", schema: invoiceInputShape, finalize: true, eInvoice: true },
-  { key: "quotation", path: "quotations", label: "quotation", schema: quotationInputShape, finalize: true, eInvoice: false },
-  { key: "credit-note", path: "credit-notes", label: "credit note", schema: genericDocumentInputShape, finalize: true, eInvoice: true },
-  { key: "order-confirmation", path: "order-confirmations", label: "order confirmation", schema: genericDocumentInputShape, finalize: true, eInvoice: false },
-  { key: "delivery-note", path: "delivery-notes", label: "delivery note", schema: genericDocumentInputShape, finalize: true, eInvoice: false },
-  { key: "dunning", path: "dunnings", label: "dunning", schema: genericDocumentInputShape, finalize: true, eInvoice: false },
+  { key: "invoice", path: "invoices", label: "invoice", schema: invoiceInputShape, finalize: true, fileRequiresFinalized: true, eInvoice: true },
+  { key: "quotation", path: "quotations", label: "quotation", schema: quotationInputShape, finalize: true, fileRequiresFinalized: true, eInvoice: false },
+  { key: "credit-note", path: "credit-notes", label: "credit note", schema: genericDocumentInputShape, finalize: true, fileRequiresFinalized: true, eInvoice: true },
+  { key: "order-confirmation", path: "order-confirmations", label: "order confirmation", schema: genericDocumentInputShape, finalize: true, fileRequiresFinalized: true, eInvoice: false },
+  { key: "delivery-note", path: "delivery-notes", label: "delivery note", schema: genericDocumentInputShape, finalize: true, fileRequiresFinalized: true, eInvoice: false },
+  // Lexware dunnings are always draft, cannot be finalized, and nevertheless expose a PDF via /file.
+  { key: "dunning", path: "dunnings", label: "dunning", schema: genericDocumentInputShape, finalize: false, fileRequiresFinalized: false, eInvoice: false },
   // down-payment-invoices are GET-only (no create/finalize) but still have a finalized PDF via /{id}/file.
-  { key: "down-payment-invoice", path: "down-payment-invoices", label: "down payment invoice", schema: null, finalize: false, eInvoice: true },
+  { key: "down-payment-invoice", path: "down-payment-invoices", label: "down payment invoice", schema: null, finalize: false, fileRequiresFinalized: true, eInvoice: true },
 ];
 
 /** Document resource paths — the `resourceType` enum for get-document-file. */
@@ -601,9 +607,13 @@ export function registerDocumentReadTools(
           ? `Download the finalized file of a ${doc.label} (GET /v1/${doc.path}/{id}/file) and return it ` +
             `inline — the PDF by default, or the e-invoice XML with format="xml" (XRechnung only). ` +
             `The document must be FINALIZED — a draft has no file yet. (get-document-file is the generic form.)`
-          : `Download the finalized PDF of a ${doc.label} (GET /v1/${doc.path}/{id}/file) and return it ` +
-            `inline. The document must be FINALIZED — a draft has no file yet. ` +
-            `(get-document-file is the generic form.)`,
+          : doc.fileRequiresFinalized
+            ? `Download the finalized PDF of a ${doc.label} (GET /v1/${doc.path}/{id}/file) and return it ` +
+              `inline. The document must be FINALIZED — a draft has no file yet. ` +
+              `(get-document-file is the generic form.)`
+            : `Download the PDF of a ${doc.label} (GET /v1/${doc.path}/{id}/file) and return it inline. ` +
+              `Lexware keeps this document type in draft status and does not require finalization before its PDF is available. ` +
+              `(get-document-file is the generic form.)`,
         // The format choice is offered only where XML is possible. A quotation, order
         // confirmation, delivery note or dunning always reports
         // `electronicDocumentProfile: "NONE"`, so advertising format="xml" there would be
@@ -720,9 +730,10 @@ export function registerDocumentReadTools(
     {
       name: "get-document-file",
       description:
-        "Download the finalized file of a document by resource + id (GET /v1/{resourceType}/{id}/file), " +
-        "returned inline — the PDF by default, or the e-invoice XML with format=\"xml\" (XRechnung only). " +
-        "The document must be FINALIZED. resourceType is the REST path, e.g. 'invoices', 'credit-notes'.",
+        "Download a document file by resource + id (GET /v1/{resourceType}/{id}/file), returned inline — " +
+        "the PDF by default, or the e-invoice XML with format=\"xml\" (XRechnung only). Most sales documents " +
+        "must be FINALIZED before a file exists; dunnings are the provider exception and remain draft while " +
+        "still exposing their PDF. resourceType is the REST path, e.g. 'invoices', 'credit-notes'.",
       inputSchema: {
         resourceType: z.enum(DOC_FILE_PATHS).describe("Document resource path, e.g. 'invoices', 'credit-notes'."),
         id: z.string(),
@@ -830,7 +841,9 @@ export function registerDocumentDraftTools(server: McpServer, client: LexwareCli
           `Create a DRAFT ${doc.label} (editable, not legally issued). Provide the full document body for a ` +
           `standalone document; with precedingSalesVoucherId the body (line items/contact) is carried over ` +
           `from that preceding voucher — dunnings can ONLY be created this way (pursue from an invoice). ` +
-          `To ISSUE a legally-binding document, use create-finalized-${doc.key} instead (finalize tier).`,
+          (doc.finalize
+            ? `To ISSUE a legally-binding document, use create-finalized-${doc.key} instead (finalize tier).`
+            : `This document type is not finalizable in Lexware; dunnings always remain draft.`),
         inputSchema: {
           ...optionalShape(doc.schema),
           precedingSalesVoucherId: z
@@ -844,10 +857,14 @@ export function registerDocumentDraftTools(server: McpServer, client: LexwareCli
           // tier). Without these params the SDK would silently strip a stale finalize=true
           // and create a draft while the caller believed it issued a binding document.
           finalize: jsonBool(z.boolean().optional()).describe(
-            `MOVED — create-draft-${doc.key} no longer finalizes. Use create-finalized-${doc.key} (finalize tier) to issue a legally-binding document.`,
+            doc.finalize
+              ? `MOVED — create-draft-${doc.key} no longer finalizes. Use create-finalized-${doc.key} (finalize tier) to issue a legally-binding document.`
+              : `UNSUPPORTED — ${doc.label}s remain draft in Lexware and do not have a finalize operation. Omit this field.`,
           ),
           confirm_finalize: jsonBool(z.boolean().optional()).describe(
-            `MOVED — see create-finalized-${doc.key}.`,
+            doc.finalize
+              ? `MOVED — see create-finalized-${doc.key}.`
+              : `UNSUPPORTED — ${doc.label}s remain draft in Lexware and do not have a finalize operation. Omit this field.`,
           ),
           additionalFields: additionalFieldsParam,
         },
@@ -855,9 +872,19 @@ export function registerDocumentDraftTools(server: McpServer, client: LexwareCli
       },
       async ({ precedingSalesVoucherId, additionalFields, finalize, confirm_finalize, ...input }) => {
         if (finalize || confirm_finalize !== undefined) {
+          if (!doc.finalize) {
+            throw new Error(
+              `create-draft-${doc.key} cannot finalize: Lexware ${doc.label}s always remain draft and expose no finalize operation.`,
+            );
+          }
           throw new Error(
             `create-draft-${doc.key} does not finalize (that moved to a separate tool). To issue a ` +
               `legally-binding ${doc.label}, use create-finalized-${doc.key} — requires LEXWARE_ENABLE_FINALIZE.`,
+          );
+        }
+        if (doc.key === "dunning" && !precedingSalesVoucherId) {
+          throw new Error(
+            "create-draft-dunning requires precedingSalesVoucherId because Lexware dunnings must pursue an existing invoice.",
           );
         }
         const query: Record<string, string | boolean> = {};

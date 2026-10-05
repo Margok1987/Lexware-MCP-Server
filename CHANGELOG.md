@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Dunnings now follow Lexware's actual draft-only lifecycle.** Lexware dunnings are always created
+  as drafts, cannot be finalized, and nevertheless expose their PDF through `/v1/dunnings/{id}/file`.
+  The server no longer registers the invalid `create-finalized-dunning` tool, no longer describes
+  the dunning PDF as requiring finalization, and rejects dunning creation locally unless
+  `precedingSalesVoucherId` identifies the invoice being pursued.
+
 ## [0.2.0]
 
 Opens up the voucherlist — multi-value filters, created/updated date bounds, number lookup and

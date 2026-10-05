@@ -71,7 +71,7 @@ const FINALIZE_TOOLS = [
   "create-finalized-credit-note",
   "create-finalized-order-confirmation",
   "create-finalized-delivery-note",
-  "create-finalized-dunning",
+  // Dunning is intentionally absent: Lexware dunnings always remain draft.
   // expansion: destructive article delete (finalize tier)
   "delete-article",
   // event-subscription create + delete are gated together in the finalize tier: a webhook
