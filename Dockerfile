@@ -26,7 +26,7 @@ ENV NODE_ENV=production
 
 COPY . .
 RUN if [ -f package-lock.json ]; then \
-      npm run build && npm prune --omit=dev; \
+      npm run build && npm prune --omit=dev --omit=peer; \
     elif [ -f yarn.lock ]; then \
       corepack enable yarn && yarn build && yarn install --frozen-lockfile --production=true; \
     elif [ -f pnpm-lock.yaml ]; then \
