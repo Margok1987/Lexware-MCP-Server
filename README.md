@@ -44,6 +44,25 @@ outside them (`upload-file-from-url`, see below):
 
 Set `LEXWARE_READ_ONLY=true` to force read-only (overrides the flags above).
 
+### XRechnung / e-invoices
+
+XRechnung uses the normal contact and invoice tools rather than a separate write tier. For a German
+public-authority customer, set `xRechnung.buyerReference` (Leitweg-ID) together with
+`xRechnung.vendorNumberAtCustomer` on the contact. Invoice draft/finalize tools expose
+`xRechnung.buyerReference` as a typed override: omit it to inherit the contact's buyer reference, or
+send an empty buyer reference to deliberately create a regular invoice for an XRechnung-enabled
+contact.
+
+When an explicit non-empty buyer reference is sent, the server rejects contradictions it can prove
+before calling Lexware: XRechnung needs `taxConditions.taxType="net"`, an existing contact reference,
+at least one line item, and name/quantity/unit on non-text lines. Lexware still performs the
+authoritative full XRechnung validation, including contact/company/footer prerequisites.
+
+After finalization, download the machine-readable XRechnung with
+`get-document-file(resourceType="invoices", id=..., format="xml")`. XML is also available for
+XRechnung credit notes and down-payment invoices. A PDF returned for an XRechnung is only a preview
+and must not be treated as the valid e-invoice.
+
 #### `upload-file-from-url` — outside the tiers, off by default
 
 One tool sits outside this table: `upload-file-from-url` fetches a file from a share link

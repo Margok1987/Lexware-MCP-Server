@@ -770,6 +770,64 @@ function optionalShape(shape: ToolInputShape): ToolInputShape {
   return out as ToolInputShape;
 }
 
+/**
+ * Fail fast on the XRechnung prerequisites we can prove from an explicit invoice body.
+ *
+ * Lexware can also create an XRechnung implicitly when an XRechnung-enabled contact is
+ * referenced and `xRechnung` is omitted; the provider owns that contact-dependent
+ * decision. A non-empty invoice-level buyerReference is different: it explicitly asks
+ * for XRechnung handling, so obvious contradictions should fail before a write.
+ *
+ * With precedingSalesVoucherId Lexware may carry address/tax/line data from the parent.
+ * We therefore validate inherited fields only when the caller actually supplied them.
+ */
+function validateExplicitXRechnungInvoice(
+  body: Record<string, unknown>,
+  precedingSalesVoucherId?: string,
+): void {
+  const xRechnung = body.xRechnung;
+  if (!xRechnung || typeof xRechnung !== "object" || Array.isArray(xRechnung)) return;
+  const buyerReference = (xRechnung as Record<string, unknown>).buyerReference;
+  if (typeof buyerReference !== "string" || buyerReference === "") return;
+
+  const taxConditions = body.taxConditions as Record<string, unknown> | undefined;
+  if (!precedingSalesVoucherId && taxConditions?.taxType !== "net") {
+    throw new Error('XRechnung requires taxConditions.taxType="net".');
+  }
+  if (taxConditions?.taxType !== undefined && taxConditions.taxType !== "net") {
+    throw new Error('XRechnung requires taxConditions.taxType="net".');
+  }
+
+  const address = body.address as Record<string, unknown> | undefined;
+  if (address !== undefined && typeof address.contactId !== "string") {
+    throw new Error("XRechnung requires address.contactId referencing an existing Lexware contact.");
+  }
+  if (!precedingSalesVoucherId && (!address || typeof address.contactId !== "string")) {
+    throw new Error("XRechnung requires address.contactId referencing an existing Lexware contact.");
+  }
+
+  const lineItems = body.lineItems;
+  if (!precedingSalesVoucherId && (!Array.isArray(lineItems) || lineItems.length === 0)) {
+    throw new Error("XRechnung requires at least one line item.");
+  }
+  if (Array.isArray(lineItems)) {
+    for (const [index, raw] of lineItems.entries()) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const item = raw as Record<string, unknown>;
+      if (item.type === "text") continue;
+      if (typeof item.name !== "string" || item.name.trim() === "") {
+        throw new Error(`XRechnung lineItems[${index}] requires a name.`);
+      }
+      if (typeof item.quantity !== "number") {
+        throw new Error(`XRechnung lineItems[${index}] requires quantity.`);
+      }
+      if (typeof item.unitName !== "string" || item.unitName.trim() === "") {
+        throw new Error(`XRechnung lineItems[${index}] requires unitName.`);
+      }
+    }
+  }
+}
+
 /** Draft-creation tools for every writable document type. Registered with the drafts tier. */
 export function registerDocumentDraftTools(server: McpServer, client: LexwareClient): void {
   for (const doc of DOC_TYPES) {
@@ -815,6 +873,7 @@ export function registerDocumentDraftTools(server: McpServer, client: LexwareCli
         const query: Record<string, string | boolean> = {};
         if (precedingSalesVoucherId) query.precedingSalesVoucherId = precedingSalesVoucherId;
         const body = mergeBody(input, additionalFields);
+        if (doc.key === "invoice") validateExplicitXRechnungInvoice(body, precedingSalesVoucherId);
         const created = await client.post<{ id: string }>(`/v1/${doc.path}`, body, query);
         return {
           structuredContent: { ...created, finalized: false },
@@ -896,6 +955,7 @@ export function registerDocumentFinalizeTools(
         const query: Record<string, string | boolean> = { finalize: true };
         if (precedingSalesVoucherId) query.precedingSalesVoucherId = precedingSalesVoucherId;
         const body = mergeBody(input, additionalFields);
+        if (doc.key === "invoice") validateExplicitXRechnungInvoice(body, precedingSalesVoucherId);
         const created = await client.post<{ id: string }>(`/v1/${doc.path}`, body, query);
         return {
           structuredContent: { ...created, finalized: true },

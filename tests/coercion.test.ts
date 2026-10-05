@@ -73,6 +73,44 @@ describe("JSON-string coercion (jsonObj) for object/array params", () => {
     expect((parsed.totalPrice as { currency: string }).currency).toBe("EUR");
   });
 
+  it("coerces first-class XRechnung objects for invoices and contacts", () => {
+    const invoice = parse(invoiceInputShape, {
+      voucherDate: "2026-06-01T00:00:00.000+02:00",
+      address: { contactId: "c1" },
+      lineItems: [{ type: "custom", name: "Item" }],
+      totalPrice: { currency: "EUR" },
+      taxConditions: { taxType: "net" },
+      shippingConditions: { shippingType: "service" },
+      xRechnung: JSON.stringify({ buyerReference: "04011000-12345-06" }),
+    }) as Record<string, unknown>;
+    expect(invoice.xRechnung).toEqual({ buyerReference: "04011000-12345-06" });
+
+    const contact = parse(contactInputShape, {
+      roles: { customer: {} },
+      company: { name: "Bundesbehörde" },
+      xRechnung: JSON.stringify({
+        buyerReference: "04011000-12345-06",
+        vendorNumberAtCustomer: "L-4711",
+      }),
+    }) as Record<string, unknown>;
+    expect(contact.xRechnung).toEqual({
+      buyerReference: "04011000-12345-06",
+      vendorNumberAtCustomer: "L-4711",
+    });
+    expect(() =>
+      parse(contactInputShape, {
+        roles: { customer: {} },
+        company: { name: "Bundesbehörde" },
+        xRechnung: { buyerReference: "04011000-12345-06" },
+      }),
+    ).toThrow();
+
+    const update = parse(contactUpdateShape, {
+      xRechnung: JSON.stringify({ buyerReference: "04011000-99999-99" }),
+    }) as Record<string, unknown>;
+    expect(update.xRechnung).toEqual({ buyerReference: "04011000-99999-99" });
+  });
+
   it("update-article accepts price as a JSON string", () => {
     const parsed = parse(
       { id: z.string(), ...articleUpdateShape },

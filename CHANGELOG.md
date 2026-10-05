@@ -28,6 +28,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or delete data.
 
 ### Added
+- XRechnung is now a first-class write surface instead of an `additionalFields` escape hatch:
+  invoice draft/finalize tools publish `xRechnung.buyerReference`, contact create/update publishes
+  `xRechnung.{buyerReference,vendorNumberAtCustomer}`, and partial contact updates merge with the
+  current contact before validating Lexware's required pair. Explicit XRechnung invoice payloads
+  fail before POST on provable contradictions (non-`net` tax type, no referenced contact, empty
+  line-item set, or non-text lines without name/quantity/unit). Omitting `xRechnung` still preserves
+  Lexware's contact-default behavior; an empty buyer reference still requests a regular invoice.
+  The existing `get-document-file(..., format="xml")` path remains the XRechnung XML download surface.
 - Every tool has a human-readable `title` (e.g. "Issue invoice (finalize, irreversible)"), which
   clients show instead of the tool name. It is set both as the top-level `title` and as
   `annotations.title`: the spec reads the first, Anthropic's directory checklist asks for the second.

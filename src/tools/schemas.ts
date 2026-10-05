@@ -10,11 +10,11 @@ import { DEFAULT_PAGE_SIZE } from "./shared.js";
  *
  * IMPORTANT: `.passthrough()` only preserves unknown keys INSIDE a typed sub-object.
  * The MCP SDK compiles each tool's top-level input shape with a strip-mode
- * `z.object`, so an unknown TOP-LEVEL field (e.g. `xRechnung` on an invoice) would
- * be silently dropped before the handler runs. Every create tool therefore exposes an
- * `additionalFields` escape hatch ({@link additionalFieldsParam}), merged into the
- * request body via {@link mergeBody}, so a valid Lexware field we don't model can
- * still be sent.
+ * `z.object`, so an unknown TOP-LEVEL field would be silently dropped before the handler
+ * runs. Every create tool therefore exposes an `additionalFields` escape hatch
+ * ({@link additionalFieldsParam}), merged into the request body via {@link mergeBody}, so
+ * a valid Lexware field we do not model yet can still be sent. Stable documented fields
+ * such as invoice/contact `xRechnung` belong in the typed shapes instead.
  */
 
 /**
@@ -55,14 +55,14 @@ export const versionParam = (noun: string) =>
 /**
  * Escape hatch for valid Lexware body fields not modeled by a create tool's shape.
  * Top-level unknown keys are stripped by the SDK's strip-mode object (see the module
- * doc), so pass any such fields here (e.g. { xRechnung: {...} }) to have them merged
- * into the request body. Typed fields on the tool take precedence over these.
+ * doc), so pass any such fields here (e.g. a newly introduced provider field) to have
+ * them merged into the request body. Typed fields on the tool take precedence over these.
  */
 export const additionalFieldsParam = jsonObj(z.record(z.string(), z.unknown()))
   .optional()
   .describe(
-    "Extra Lexware body fields not covered by this tool's parameters (e.g. xRechnung), merged into the " +
-      "request as-is. Use only for valid API fields the tool doesn't already expose.",
+    "Extra Lexware body fields not covered by this tool's parameters, merged into the request as-is. " +
+      "Use only for valid API fields the tool doesn't already expose.",
   );
 
 /**
@@ -180,6 +180,22 @@ export const paymentConditionsSchema = z
   })
   .passthrough();
 
+/**
+ * Invoice-level XRechnung override. Omit the object to inherit an XRechnung-enabled
+ * contact's buyer reference. Set buyerReference="" to force a regular invoice for such
+ * a contact. A non-empty buyerReference explicitly requests XRechnung handling.
+ */
+export const invoiceXRechnungSchema = z
+  .object({
+    buyerReference: z
+      .string()
+      .describe(
+        "Customer Leitweg-ID for this invoice. Omit xRechnung to inherit the referenced contact's value; " +
+          'set buyerReference="" to create a regular invoice for an XRechnung-enabled contact.',
+      ),
+  })
+  .passthrough();
+
 /** Fields common to every voucher document; specific shapes spread this. */
 const baseDocumentShape = {
   voucherDate: z.string().describe("ISO date/dateTime of the document."),
@@ -246,10 +262,16 @@ const baseDocumentShape = {
     ),
 } as const;
 
-/** Invoice (draft or finalized): base fields + required shippingConditions. */
+/** Invoice (draft or finalized): base fields + required shippingConditions + XRechnung override. */
 export const invoiceInputShape = {
   ...baseDocumentShape,
   shippingConditions: jsonObj(shippingConditionsSchema),
+  xRechnung: jsonObj(invoiceXRechnungSchema)
+    .optional()
+    .describe(
+      "XRechnung override for an existing XRechnung-enabled contact. Non-empty buyerReference requests " +
+        "XRechnung; omit to inherit the contact default; empty buyerReference forces a regular invoice.",
+    ),
 } as const;
 
 /** Quotation: base fields + expirationDate (no shippingConditions). */
@@ -397,6 +419,17 @@ const contactEmailAddressesSchema = z
   })
   .passthrough();
 
+/** XRechnung identity stored on a public-authority customer contact. */
+export const contactXRechnungSchema = z
+  .object({
+    buyerReference: z.string().describe("Customer Leitweg-ID for XRechnung."),
+    vendorNumberAtCustomer: z.string().describe("Your vendor number as used by the customer."),
+  })
+  .passthrough()
+  .describe(
+    "XRechnung contact settings. Lexware requires vendorNumberAtCustomer whenever buyerReference is set.",
+  );
+
 /** Contact creation: roles + person or company. version must be 0 for create. */
 export const contactInputShape = {
   roles: jsonObj(contactRolesSchema.describe('At least one role, e.g. { "customer": {} }.')),
@@ -413,6 +446,9 @@ export const contactInputShape = {
       .describe("For a company; name is required. May include vatRegistrationId."),
   ).optional(),
   addresses: jsonObj(contactAddressesSchema).optional(),
+  xRechnung: jsonObj(contactXRechnungSchema)
+    .optional()
+    .describe("XRechnung settings for a German public-authority customer contact."),
   emailAddresses: jsonObj(contactEmailAddressesSchema).optional(),
   phoneNumbers: jsonObj(contactPhoneNumbersSchema).optional(),
   // NOTE: `archived` is deliberately not exposed — it is READ-ONLY on the Lexware
@@ -440,6 +476,11 @@ export const contactUpdateShape = {
       .describe("Company fields to set (e.g. vatRegistrationId); merged into the existing company."),
   ).optional(),
   addresses: jsonObj(contactAddressesSchema).optional(),
+  xRechnung: jsonObj(contactXRechnungSchema.partial())
+    .optional()
+    .describe(
+      "XRechnung settings. Partial updates are merged with the current contact before Lexware's buyerReference/vendorNumberAtCustomer pair is validated.",
+    ),
   emailAddresses: jsonObj(contactEmailAddressesSchema).optional(),
   phoneNumbers: jsonObj(contactPhoneNumbersSchema).optional(),
   // NOTE: `archived` is READ-ONLY on the Lexware contacts API — a PUT with archived:true
