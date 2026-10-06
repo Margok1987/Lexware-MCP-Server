@@ -15,32 +15,8 @@ import { DESTRUCTIVE, RO, WRITE, deepMergePatch, deleteIdempotent, pagedResult, 
 
 /** Read tools for articles (products/services). Always registered. */
 export function registerArticleReadTools(server: McpServer, client: LexwareClient): void {
-  server.registerTool(
-    {
-      name: "list-articles",
-      title: "List articles",
-      description:
-        "List articles (products/services). Optional filters; results are paged (use page/size to fetch more).",
-      inputSchema: {
-        articleNumber: z.string().optional(),
-        gtin: z.string().optional(),
-        type: z.enum(["PRODUCT", "SERVICE"]).optional(),
-        page: pageParam,
-        size: sizeParamMin25,
-      },
-      annotations: RO,
-    },
-    async ({ articleNumber, gtin, type, page, size }) => {
-      const result = await client.get<Paged<Record<string, unknown>>>("/v1/articles", {
-        articleNumber,
-        gtin,
-        type,
-        page,
-        size,
-      });
-      return pagedResult(result, "article(s)");
-    },
-  );
+  // TEMPORARY CONNECTOR-REFRESH PROBE: list-articles intentionally withdrawn.
+  // Owner-approved diagnostic on 2026-10-06; restore immediately after client catalog refresh.
 
   server.registerTool(
     {
