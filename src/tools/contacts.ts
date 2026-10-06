@@ -1,14 +1,20 @@
 import type { McpServer } from "skybridge/server";
 import { z } from "zod";
 import type { LexwareClient } from "../lexware/client.js";
+import { encodeSearchFilter } from "../lexware/search.js";
+import type { Paged } from "../lexware/types.js";
 import {
   additionalFieldsParam,
   contactInputShape,
   contactUpdateShape,
+  jsonBool,
+  jsonNum,
   mergeBody,
+  pageParam,
+  sizeParamMin25,
   versionParam,
 } from "./schemas.js";
-import { DESTRUCTIVE, RO, WRITE, deepMergePatch, mergeAddresses, text } from "./shared.js";
+import { DESTRUCTIVE, RO, WRITE, deepMergePatch, mergeAddresses, pagedResult, text } from "./shared.js";
 
 /** Enforce Lexware's buyerReference/vendorNumberAtCustomer pair after all merges. */
 function validateContactXRechnung(body: Record<string, unknown>): void {
@@ -24,8 +30,54 @@ function validateContactXRechnung(body: Record<string, unknown>): void {
 
 /** Read tools for contacts. Always registered. */
 export function registerContactReadTools(server: McpServer, client: LexwareClient): void {
-  // TEMPORARY CONNECTOR-REFRESH PROBE: list-contacts intentionally withdrawn.
-  // Owner-approved diagnostic on 2026-10-06; restore immediately after client catalog refresh.
+  server.registerTool(
+    {
+      name: "list-contacts",
+      title: "List contacts",
+      description:
+        "List/search contacts (customers and vendors). Optional filters; results are paged (use page/size).",
+      inputSchema: {
+        email: z
+          .string()
+          .min(3)
+          .optional()
+          .describe(
+            "Substring match, min 3 chars. Case-insensitive; Lexware also accepts SQL-style " +
+              "wildcards, `_` for one character and `%` for any run.",
+          ),
+        name: z
+          .string()
+          .min(3)
+          .optional()
+          .describe(
+            "Substring match, min 3 chars. Case-insensitive; Lexware also accepts SQL-style " +
+              "wildcards, `_` for one character and `%` for any run.",
+          ),
+        number: jsonNum(z.number().int().optional()).describe("Contact number."),
+        customer: jsonBool(z.boolean().optional()),
+        vendor: jsonBool(z.boolean().optional()),
+        page: pageParam,
+        size: sizeParamMin25,
+      },
+      annotations: RO,
+    },
+    async ({ email, name, number, customer, vendor, page, size }) => {
+      const result = await client.get<Paged<Record<string, unknown>>>("/v1/contacts", {
+        // `&`, `<` and `>` have to be HTML-encoded on top of the URL encoding the
+        // client already applies, or Lexware matches nothing at all. See
+        // encodeSearchFilter for the verification. Only these two params are search
+        // strings; `number`, `customer` and `vendor` must NOT go through it.
+        email: encodeSearchFilter(email),
+        name: encodeSearchFilter(name),
+        number,
+        customer,
+        vendor,
+        page,
+        size,
+      });
+      return pagedResult(result, "contact(s)");
+    },
+  );
 
   server.registerTool(
     {
