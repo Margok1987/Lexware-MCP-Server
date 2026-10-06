@@ -1,20 +1,14 @@
 import type { McpServer } from "skybridge/server";
 import { z } from "zod";
 import type { LexwareClient } from "../lexware/client.js";
-import { encodeSearchFilter } from "../lexware/search.js";
-import type { Paged } from "../lexware/types.js";
 import {
   additionalFieldsParam,
   contactInputShape,
   contactUpdateShape,
-  jsonBool,
-  jsonNum,
   mergeBody,
-  pageParam,
-  sizeParamMin25,
   versionParam,
 } from "./schemas.js";
-import { DESTRUCTIVE, RO, WRITE, deepMergePatch, mergeAddresses, pagedResult, text } from "./shared.js";
+import { DESTRUCTIVE, RO, WRITE, deepMergePatch, mergeAddresses, text } from "./shared.js";
 
 /** Enforce Lexware's buyerReference/vendorNumberAtCustomer pair after all merges. */
 function validateContactXRechnung(body: Record<string, unknown>): void {
