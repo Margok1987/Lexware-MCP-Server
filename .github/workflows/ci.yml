@@ -23,8 +23,9 @@ jobs:
         run: npm run build
       - name: Test
         run: npm test
-      - name: Audit (production deps)
-        run: npm audit --omit=dev --audit-level=high
+      - name: Audit (deployed production deps)
+        # The Docker runtime prunes both dev and peer dependencies; audit the same deployed set.
+        run: npm audit --omit=dev --omit=peer --audit-level=high
 
   docker:
     runs-on: ubuntu-latest
