@@ -44,3 +44,37 @@ This is a tool-first MCP server with no required custom view.
 - Dunning creation requires an existing preceding invoice and remains draft-only in Lexware; no finalized-dunning operation exists.
 - Tool registration is determined by the current capability tiers. Disabled capabilities are not advertised.
 - Current source and runtime behavior are authoritative; obsolete aliases and compatibility-only names are not retained in the active surface.
+
+## UX Flows
+
+### Read data
+1. User expresses a Lexware read intent.
+2. Assistant selects one current read tool.
+3. Server returns structured native/normalized data or a file/resource result.
+4. Assistant summarizes the verified result.
+
+### Draft or mutable write
+1. User expresses an allowed draft/master-data/bookkeeping write intent.
+2. Assistant selects the exact write tool and supplies only its current schema.
+3. Server validates and performs one bounded provider write.
+4. Current Lexware state is read back when verification is required by the operation.
+
+### Finalize / irreversible action
+1. User explicitly requests a finalizing/irreversible effect.
+2. Assistant selects a finalize-tier tool; draft tools never carry finalize compatibility fields.
+3. Required confirmation/elicitation is applied by the finalize path.
+4. The provider effect is returned and subsequently verified as required.
+
+Dunnings are excluded from this flow because Lexware dunnings are not finalizable.
+
+### File upload
+1. User provides or identifies a file for a permitted Lexware upload.
+2. Assistant uses direct upload or the upload-ticket flow according to the current operation.
+3. Server returns the provider file/result identifier.
+4. Follow-up bookkeeping operations use that current identifier where authorized.
+
+## Tools and Views
+
+This MCP server uses **tools only** for the current product surface; no custom view is required.
+
+Tool names are current semantic actions. The active source does not retain obsolete per-document read wrappers or compatibility-only aliases. Generic document access is provided by `get-document` and `get-document-file`.
