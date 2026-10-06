@@ -58,7 +58,6 @@ const FINALIZE_TOOLS = [
   "create-finalized-credit-note",
   "create-finalized-order-confirmation",
   "create-finalized-delivery-note",
-  "create-finalized-dunning",
   // expansion: destructive article delete (finalize tier)
   "delete-article",
   // event-subscription create + delete are gated together in the finalize tier: a webhook
@@ -150,6 +149,23 @@ describe("tool metadata", () => {
       xRechnung: { buyerReference: "04011000-99999-99" },
     }) as Record<string, unknown>;
     expect(update.xRechnung).toEqual({ buyerReference: "04011000-99999-99" });
+  });
+
+  it("does not expose finalize compatibility fields on draft document tools", () => {
+    const byName = new Map(defs.map((d) => [d.name, d]));
+    for (const name of [
+      "create-draft-invoice",
+      "create-draft-quotation",
+      "create-draft-credit-note",
+      "create-draft-order-confirmation",
+      "create-draft-delivery-note",
+      "create-draft-dunning",
+    ]) {
+      const shape = byName.get(name)?.inputSchema;
+      expect(shape, name).toBeDefined();
+      expect(shape, name).not.toHaveProperty("finalize");
+      expect(shape, name).not.toHaveProperty("confirm_finalize");
+    }
   });
 
   it("declares no outputSchema while Claude's clients still fail on them (see shared.ts)", () => {

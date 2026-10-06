@@ -61,7 +61,7 @@ const DOC_TYPES: DocType[] = [
   { key: "credit-note", path: "credit-notes", label: "credit note", schema: genericDocumentInputShape, finalize: true, eInvoice: true },
   { key: "order-confirmation", path: "order-confirmations", label: "order confirmation", schema: genericDocumentInputShape, finalize: true, eInvoice: false },
   { key: "delivery-note", path: "delivery-notes", label: "delivery note", schema: genericDocumentInputShape, finalize: true, eInvoice: false },
-  { key: "dunning", path: "dunnings", label: "dunning", schema: genericDocumentInputShape, finalize: true, eInvoice: false },
+  { key: "dunning", path: "dunnings", label: "dunning", schema: genericDocumentInputShape, finalize: false, eInvoice: false },
   // down-payment-invoices are GET-only (no create/finalize) but still have a finalized PDF via /{id}/file.
   { key: "down-payment-invoice", path: "down-payment-invoices", label: "down payment invoice", schema: null, finalize: false, eInvoice: true },
 ];
@@ -668,10 +668,11 @@ export function registerDocumentReadTools(
       name: "get-document-file",
       title: "Download document file",
       description:
-        "Download the finalized file of a sales document by resource + id (GET /v1/{resourceType}/{id}/file), " +
-        "returned inline — the PDF by default, or the e-invoice XML with format=\"xml\", which exists only for " +
-        "an XRechnung invoice, credit note or down payment invoice. The document must be FINALIZED — a draft " +
-        "has no file yet. resourceType is the REST path, e.g. 'invoices', 'credit-notes'.",
+        "Download a sales-document file by resource + id (GET /v1/{resourceType}/{id}/file), returned inline — " +
+        "the PDF by default, or the e-invoice XML with format=\"xml\", which exists only for an XRechnung invoice, " +
+        "credit note or down payment invoice. Most sales documents require a finalized state before a file exists; " +
+        "Lexware dunnings are the provider exception and remain draft while still exposing their PDF. " +
+        "resourceType is the REST path, e.g. 'invoices', 'credit-notes'.",
       inputSchema: {
         resourceType: z.enum(DOC_FILE_PATHS).describe("Document resource path, e.g. 'invoices', 'credit-notes'."),
         id: z.string(),
@@ -851,8 +852,10 @@ export function registerDocumentDraftTools(server: McpServer, client: LexwareCli
         description:
           `Create a DRAFT ${doc.label} (editable, not legally issued). Provide the full document body for a ` +
           `standalone document; with precedingSalesVoucherId the body (line items/contact) is carried over ` +
-          `from that preceding voucher — dunnings can ONLY be created this way (pursue from an invoice). ` +
-          `To ISSUE a legally-binding document, use create-finalized-${doc.key} instead (finalize tier).`,
+          `from that preceding voucher. ` +
+          (doc.key === "dunning"
+            ? "Lexware dunnings must pursue an existing invoice, require precedingSalesVoucherId, and remain draft-only."
+            : `To issue a legally-binding document, use create-finalized-${doc.key} instead (finalize tier).`),
         inputSchema: {
           ...optionalShape(doc.schema),
           precedingSalesVoucherId: z
@@ -862,24 +865,14 @@ export function registerDocumentDraftTools(server: McpServer, client: LexwareCli
               "Create as a follow-up of this preceding sales voucher id (e.g. quotation→order-confirmation→" +
                 "invoice, invoice→credit-note/dunning). POSTs ?precedingSalesVoucherId={id}.",
             ),
-          // Accepted only to fail LOUDLY: finalizing moved to create-finalized-* (finalize
-          // tier). Without these params the SDK would silently strip a stale finalize=true
-          // and create a draft while the caller believed it issued a binding document.
-          finalize: jsonBool(z.boolean().optional()).describe(
-            `MOVED — create-draft-${doc.key} no longer finalizes. Use create-finalized-${doc.key} (finalize tier) to issue a legally-binding document.`,
-          ),
-          confirm_finalize: jsonBool(z.boolean().optional()).describe(
-            `MOVED — see create-finalized-${doc.key}.`,
-          ),
           additionalFields: additionalFieldsParam,
         },
         annotations: WRITE,
       },
-      async ({ precedingSalesVoucherId, additionalFields, finalize, confirm_finalize, ...input }) => {
-        if (finalize || confirm_finalize !== undefined) {
+      async ({ precedingSalesVoucherId, additionalFields, ...input }) => {
+        if (doc.key === "dunning" && !precedingSalesVoucherId) {
           throw new Error(
-            `create-draft-${doc.key} does not finalize (that moved to a separate tool). To issue a ` +
-              `legally-binding ${doc.label}, use create-finalized-${doc.key} — requires LEXWARE_ENABLE_FINALIZE.`,
+            "create-draft-dunning requires precedingSalesVoucherId because Lexware dunnings must pursue an existing invoice.",
           );
         }
         const query: Record<string, string | boolean> = {};

@@ -33,14 +33,14 @@ Related projects — local (stdio) Lexware MCP servers:
 
 ## Capabilities
 
-62 tools across three tiers you enable via environment variables, plus one opt-in tool
-outside them (`upload-file-from-url`, see below):
+48 current tool capabilities across the read, draft/write, finalize and URL-upload surfaces.
+Registration depends on the enabled capability tiers; `upload-file-from-url` remains separately opt-in (see below):
 
 | Tier | Default | What it covers |
 |------|---------|----------------|
-| **Read** | always on | Profile; contacts & articles (list/get); the voucherlist (plus `summarize-vouchers` for server-side totals); full documents (invoices, quotations, credit notes, order confirmations, delivery notes, dunnings, down-payment invoices, vouchers); **render any document type to PDF** and **download files/receipts** (returned inline as embedded resources); batch & type-dispatched reads (get-vouchers, get-document, get-voucher-file, get-document-file); payments; reference data (countries, payment conditions, posting categories, print layouts); recurring templates (get & list); event subscriptions; document deeplinks |
-| **Drafts/writes** (`LEXWARE_ENABLE_DRAFTS`) | on | Create **draft** invoices/quotations/credit-notes/order-confirmations/delivery-notes/dunnings (the Lexware API has no update endpoint for these — set every field, including payment terms, at creation); create & update contacts, articles, and **bookkeeping vouchers**; **upload files** and **attach receipts** to vouchers — inline as base64, or **without base64** via a short-lived upload ticket (`create-upload-ticket` → browser drag-and-drop or a `curl` one-liner → `get-upload-result`); create documents as **follow-ups** (`precedingSalesVoucherId`) |
-| **Finalize** (`LEXWARE_ENABLE_FINALIZE`) | off | Issue **legally binding** finalized documents in one step via the dedicated `create-finalized-*` tools (confirmation-gated); irreversible article deletes; **manage webhook event subscriptions** (create + delete — a webhook streams financial events to an external URL, so it's opt-in). Enabling this tier also enables Drafts. |
+| **Read** | always on | Profile; contacts & articles (list/get); the voucherlist (plus `summarize-vouchers` for server-side totals); generic document reads through `get-document`; document files through `get-document-file` (PDF, plus XML where the provider exposes an e-invoice); voucher receipts/files; payments; reference data; recurring templates; event subscriptions; document deeplinks |
+| **Drafts/writes** (`LEXWARE_ENABLE_DRAFTS`) | on | Create draft invoices/quotations/credit-notes/order-confirmations/delivery-notes and dunnings; create & update contacts, articles and bookkeeping vouchers; upload files and attach receipts; use short-lived upload tickets when bytes should bypass the model. Dunnings require `precedingSalesVoucherId` and remain draft-only. |
+| **Finalize** (`LEXWARE_ENABLE_FINALIZE`) | off | Issue only provider-finalizable documents through dedicated `create-finalized-*` tools (confirmation-gated); irreversible article deletes; manage webhook event subscriptions. Dunnings are intentionally absent because Lexware does not finalize them. Enabling this tier also enables Drafts. |
 
 Set `LEXWARE_READ_ONLY=true` to force read-only (overrides the flags above).
 
@@ -180,7 +180,7 @@ asks for a token, and expects this server's protected-resource metadata to name 
 ## Quick start (Docker)
 
 ```bash
-git clone https://github.com/marselsel/Lexware-MCP-Server && cd Lexware-MCP-Server
+git clone https://github.com/Margok1987/Lexware-MCP-Server && cd Lexware-MCP-Server
 cp .env.example .env          # set LEXWARE_API_KEY and MCP_AUTH_TOKEN
 docker compose up --build     # serves on http://localhost:8080/mcp
 ```

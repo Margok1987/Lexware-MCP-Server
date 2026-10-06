@@ -386,14 +386,20 @@ describe("create-draft: body forwarding + precedingSalesVoucherId (no finalize f
     expect(call[2]).toEqual({}); // and never reaches the query either
   });
 
-  it("rejects a stale finalize=true on a draft tool with a pointer to create-finalized-*", async () => {
-    const post = vi.fn(async () => ({ id: "i1" }));
+  it("requires an existing invoice before creating a dunning and keeps it draft-only", async () => {
+    const post = vi.fn(async () => ({ id: "d1" }));
     const client = { post } as unknown as LexwareClient;
     const handlers = handlersFor(registerDocumentDraftTools, client);
-    await expect(
-      handlers["create-draft-invoice"]({ ...docBody, finalize: true, confirm_finalize: true }),
-    ).rejects.toThrow(/create-finalized-invoice/);
-    expect(post).not.toHaveBeenCalled(); // fails loudly instead of silently creating a draft
+
+    await expect(handlers["create-draft-dunning"]({})).rejects.toThrow(/precedingSalesVoucherId/);
+    expect(post).not.toHaveBeenCalled();
+
+    const res = (await handlers["create-draft-dunning"]({
+      precedingSalesVoucherId: "i1",
+    })) as { structuredContent: { finalized: boolean } };
+
+    expect(post).toHaveBeenCalledWith("/v1/dunnings", {}, { precedingSalesVoucherId: "i1" });
+    expect(res.structuredContent.finalized).toBe(false);
   });
 });
 
