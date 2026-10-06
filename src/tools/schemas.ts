@@ -101,6 +101,11 @@ export const sizeParam = jsonNum(z.number().int().min(1).max(250).default(DEFAUL
   "Page size (max 250).",
 );
 
+/** Provider-specific paging for contacts/articles: Lexware rejects values below 25. */
+export const sizeParamMin25 = jsonNum(z.number().int().min(25).max(250).default(DEFAULT_PAGE_SIZE)).describe(
+  "Page size (25-250).",
+);
+
 export const moneySchema = z
   .object({
     currency: z.string().default("EUR").describe("ISO currency; Lexware supports EUR."),

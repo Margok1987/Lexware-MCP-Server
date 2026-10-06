@@ -151,6 +151,25 @@ describe("tool metadata", () => {
     expect(update.xRechnung).toEqual({ buyerReference: "04011000-99999-99" });
   });
 
+  it("publishes provider-accurate page-size lower bounds", () => {
+    const byName = new Map(defs.map((d) => [d.name, d]));
+
+    for (const name of ["list-contacts", "list-articles"]) {
+      const shape = byName.get(name)?.inputSchema;
+      expect(shape, name).toBeDefined();
+      const schema = z.object(shape as z.ZodRawShape);
+      expect(() => schema.parse({ size: 1 }), name).toThrow();
+      expect(schema.parse({ size: 25 }).size, name).toBe(25);
+    }
+
+    for (const name of ["get-voucherlist", "list-recurring-templates"]) {
+      const shape = byName.get(name)?.inputSchema;
+      expect(shape, name).toBeDefined();
+      const schema = z.object(shape as z.ZodRawShape);
+      expect(schema.parse({ size: 1 }).size, name).toBe(1);
+    }
+  });
+
   it("does not expose finalize compatibility fields on draft document tools", () => {
     const byName = new Map(defs.map((d) => [d.name, d]));
     for (const name of [

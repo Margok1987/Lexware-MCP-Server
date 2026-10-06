@@ -43,6 +43,7 @@ This is a tool-first MCP server with no required custom view.
 - Draft tools expose only draft semantics. Finalization is not represented as a compatibility field on a draft tool.
 - Dunning creation requires an existing preceding invoice and remains draft-only in Lexware; no finalized-dunning operation exists.
 - Tool registration is determined by the current capability tiers. Disabled capabilities are not advertised.
+- Contacts and articles enforce Lexware's provider minimum page size of 25 (`size=25..250`); other paginated tools retain their own provider-specific lower bounds.
 - Current source and runtime behavior are authoritative; obsolete aliases and compatibility-only names are not retained in the active surface.
 
 ## UX Flows

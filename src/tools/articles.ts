@@ -8,7 +8,7 @@ import {
   articleUpdateShape,
   mergeBody,
   pageParam,
-  sizeParam,
+  sizeParamMin25,
   versionParam,
 } from "./schemas.js";
 import { DESTRUCTIVE, RO, WRITE, deepMergePatch, deleteIdempotent, pagedResult, text } from "./shared.js";
@@ -26,7 +26,7 @@ export function registerArticleReadTools(server: McpServer, client: LexwareClien
         gtin: z.string().optional(),
         type: z.enum(["PRODUCT", "SERVICE"]).optional(),
         page: pageParam,
-        size: sizeParam,
+        size: sizeParamMin25,
       },
       annotations: RO,
     },

@@ -11,7 +11,7 @@ import {
   jsonNum,
   mergeBody,
   pageParam,
-  sizeParam,
+  sizeParamMin25,
   versionParam,
 } from "./schemas.js";
 import { DESTRUCTIVE, RO, WRITE, deepMergePatch, mergeAddresses, pagedResult, text } from "./shared.js";
@@ -57,7 +57,7 @@ export function registerContactReadTools(server: McpServer, client: LexwareClien
         customer: jsonBool(z.boolean().optional()),
         vendor: jsonBool(z.boolean().optional()),
         page: pageParam,
-        size: sizeParam,
+        size: sizeParamMin25,
       },
       annotations: RO,
     },
